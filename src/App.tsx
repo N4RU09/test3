@@ -283,6 +283,41 @@ export default function App() {
               color: pColor,
               characterType: pCharType,
             };
+
+            setPlayersList(prev => {
+              if (prev.some(p => p.id === senderPeerId)) {
+                return prev.map(p => {
+                  if (p.id === senderPeerId) {
+                    if (isFinished && !p.isFinished) {
+                      addChatMessage('FINISH', p.color, `🎉 ${p.name}님이 골인했습니다! 기록: ${(finishTime / 1000).toFixed(2)}초`, true);
+                      if (winnerDetails === null) {
+                        setWinnerDetails({ name: p.name, time: finishTime, avatar: CHARACTER_SKINS[p.characterType]?.emoji || '🏆' });
+                      }
+                    }
+                    return { ...p, x, y, vx, vy, heightRecord, isFinished, finishTime };
+                  }
+                  return p;
+                });
+              } else {
+                const newPlayer: Player = {
+                  id: senderPeerId,
+                  name: pName,
+                  color: pColor,
+                  isReady: true,
+                  score: 0,
+                  isSpectator: false,
+                  characterType: pCharType,
+                  x,
+                  y,
+                  vx,
+                  vy,
+                  isFinished,
+                  heightRecord,
+                  finishTime
+                };
+                return [...prev, newPlayer];
+              }
+            });
           }
           break;
         }
@@ -445,8 +480,23 @@ export default function App() {
 
   const broadcastStateSync = (currentPlayers: Player[]) => {
     const listMap: Record<string, Player> = {};
+    const localPhysics = localPlayerPhysicsRef.current;
+    
     currentPlayers.forEach(p => {
-      listMap[p.id] = p;
+      if (p.id === network.peerId) {
+        listMap[p.id] = {
+          ...p,
+          x: localPhysics.x,
+          y: Math.floor(localPhysics.y),
+          vx: localPhysics.vx,
+          vy: localPhysics.vy,
+          heightRecord: Math.max(p.heightRecord, localPhysics.heightRecord),
+          isFinished: p.isFinished || localPhysics.isFinished,
+          finishTime: p.isFinished || localPhysics.isFinished ? (p.finishTime || localPhysics.finishTime) : undefined
+        };
+      } else {
+        listMap[p.id] = p;
+      }
     });
 
     network.send({
@@ -718,8 +768,7 @@ export default function App() {
     if (!ctx) return;
 
     const myId = network.peerId;
-    const selfInList = playersList.find(p => p.id === myId);
-    const selfIsSpectating = selfInList?.isSpectator ?? isSpectatorMode;
+    const selfIsSpectating = isSpectatorMode;
 
     const gameFrameLoop = () => {
       const localPhysics = localPlayerPhysicsRef.current;
@@ -1202,7 +1251,7 @@ export default function App() {
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [screen, selectedSkinId, isSpectatorMode, spectatorTargetId, playersList, isFin => localPlayerPhysicsRef.current.isFinished, winnerDetails]);
+  }, [screen, selectedSkinId, isSpectatorMode, spectatorTargetId]);
 
   const handleSendChatMsg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1933,9 +1982,37 @@ export default function App() {
 
                 <div className="space-y-2">
                   {playersList
-                    .filter(p => !p.isSpectator)
                     .map(p => {
-                      const percentage = Math.min(100, Math.max(0, (p.heightRecord / lobbySettings.mapHeight) * 100));
+                      if (p.id === network.peerId && !p.isSpectator) {
+                        return {
+                          ...p,
+                          y: Math.floor(localPlayerPhysicsRef.current.y),
+                          heightRecord: Math.max(p.heightRecord, localPlayerPhysicsRef.current.heightRecord),
+                          isFinished: p.isFinished || localPlayerPhysicsRef.current.isFinished,
+                          finishTime: p.isFinished || localPlayerPhysicsRef.current.isFinished ? (p.finishTime || localPlayerPhysicsRef.current.finishTime) : undefined
+                        };
+                      }
+                      return {
+                        ...p,
+                        y: Math.floor(p.y ?? 0)
+                      };
+                    })
+                    .filter(p => !p.isSpectator)
+                    .sort((a, b) => {
+                      if (a.isFinished && b.isFinished) {
+                        return (a.finishTime || 0) - (b.finishTime || 0);
+                      }
+                      if (a.isFinished) return -1;
+                      if (b.isFinished) return 1;
+                      
+                      const aY = a.y || 0;
+                      const bY = b.y || 0;
+                      if (bY !== aY) return bY - aY;
+                      return b.heightRecord - a.heightRecord;
+                    })
+                    .map(p => {
+                      const currentHeightVal = p.isFinished ? lobbySettings.mapHeight : Math.floor(p.y || 0);
+                      const percentage = Math.min(100, Math.max(0, (currentHeightVal / lobbySettings.mapHeight) * 100));
                       const isMe = p.id === network.peerId;
                       const hasFinished = p.isFinished;
                       
@@ -1960,7 +2037,10 @@ export default function App() {
                                   <span>완료! ({(p.finishTime || 0) / 1000}초)</span>
                                 </span>
                               ) : (
-                                <span>{p.heightRecord}m / {lobbySettings.mapHeight}m</span>
+                                <span className="flex flex-col items-end gap-0.5 text-right leading-none">
+                                  <span className="text-emerald-400 font-bold font-sans">현재: {Math.floor(p.y || 0)}m</span>
+                                  <span className="text-[10px] text-slate-400">최고: {p.heightRecord}m</span>
+                                </span>
                               )}
                             </span>
                           </div>

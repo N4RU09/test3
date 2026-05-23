@@ -44,8 +44,8 @@ export const generateMap = (height: number): Platform[] => {
 
   while (currentY < height - 150) {
     count++;
-    // Make platforms narrower as the player climbs higher!
-    const width = Math.max(70, 160 - Math.floor(currentY / 45));
+    // Platforms maintain a consistent comfortable width of 130 regardless of height/altitude
+    const width = 130;
     const platHeight = 14;
     const x = Math.random() * (800 - width);
 
@@ -84,8 +84,8 @@ export const generateMap = (height: number): Platform[] => {
 
     platforms.push(platform);
 
-    // Dynamic distance step between platforms (reduced by 10% to 94.5 + rand * 58.5)
-    currentY += 94.5 + Math.random() * 58.5;
+    // Dynamic distance step between platforms (reduced by 40% to 63.0 + rand * 39.0)
+    currentY += 63.0 + Math.random() * 39.0;
   }
 
   // Neon Finish line crown platform at the top
