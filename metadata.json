@@ -1,0 +1,6 @@
+{
+  "name": "Jump UP!",
+  "description": "PeerJS를 이용한 실시간 멀티플레이어 점프 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
